@@ -1,4 +1,4 @@
-import { prisma } from '../db/prisma.js';
+import { prisma } from '../database/prisma.js';
 
 // --- ДЛЯ ДИСПЕТЧЕРА (Модуль 4.1) ---
 export async function createIncident(data) {
