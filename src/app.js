@@ -22,125 +22,111 @@ if (!process.env.BOT_TOKEN) {
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
 // --------------------------------------------------------
-// КОМАНДЫ (Ручное управление)
+// ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ПАССАЖИРОВ
 // --------------------------------------------------------
+async function handlePassengerQuery(ctx, text) {
+  try {
+    await ctx.sendChatAction("typing");
+    const parsedData = await analyzeMessageWithLangChain(text);
 
-bot.command("dispatch", async (ctx) => {
-  const text = ctx.message.text.replace("/dispatch", "").trim();
-  if (!text) return ctx.reply("❌ Напишите текст заявки после команды /dispatch");
+    if (!parsedData || !parsedData.isDelayQuestion) {
+      return ctx.reply("👋 Здравствуйте! Я диспетчерский бот. Спросите меня: «Где 12 троллейбус?»", {
+        reply_to_message_id: ctx.message.message_id
+      });
+    }
 
-  ctx.reply("⏳ Анализирую заявку...");
-  const parsedData = await analyzeDispatcherMessage(text);
-  if (!parsedData) return ctx.reply("❌ Ошибка анализа заявки.");
+    // УМНЫЙ ПОИСК: если тип не определен, но есть маршрут — ищем широко
+    let incidents = [];
+    if (parsedData.transportType) {
+      incidents = await findRelevantIncident(parsedData);
+    } else if (parsedData.routes && parsedData.routes.length > 0) {
+      incidents = await findRelevantIncident({ ...parsedData, transportType: null });
+    }
 
-  const result = await createIncident(parsedData);
-  if (result) {
-    ctx.reply(result.isNew ? `✅ Новая заявка ID: ${result.incident.id}.` : `ℹ️ Инцидент (ID: ${result.incident.id}) обновлен.`);
-  } else {
-    ctx.reply("❌ Ошибка базы данных.");
+    if (incidents.length === 0) {
+      return ctx.reply("ℹ️ Активных инцидентов по вашему запросу не найдено.", {
+        reply_to_message_id: ctx.message.message_id
+      });
+    }
+
+    // Проверка на неоднозначность (если нашли разные типы транспорта)
+    const uniqueTypes = [...new Set(incidents.map(i => i.transportType))];
+    if (uniqueTypes.length > 1 && !parsedData.transportType) {
+      return ctx.reply("🤔 Я нашел данные по этому маршруту и для трамваев, и для троллейбусов. Уточните, пожалуйста, что именно вас интересует?", {
+        reply_to_message_id: ctx.message.message_id
+      });
+    }
+
+    const replyText = generateReply(incidents, parsedData);
+    await ctx.reply(replyText, { reply_to_message_id: ctx.message.message_id });
+  } catch (err) {
+    console.error("Ошибка обработки пассажира:", err);
+    await ctx.reply("Извините, сервис временно недоступен.");
   }
-});
-
-bot.command("resolve", async (ctx) => {
-  const text = ctx.message.text.replace("/resolve", "").trim();
-  if (!text) return ctx.reply("❌ Напишите текст восстановления движения.");
-
-  ctx.reply("⏳ Обрабатываю закрытие...");
-  const parsedData = await analyzeResolutionMessage(text);
-  if (!parsedData) return ctx.reply("❌ Ошибка анализа.");
-
-  const result = await resolveIncident(parsedData);
-  if (result && result.count > 0) {
-    ctx.reply(`✅ Движение восстановлено! Закрыто активных заявок: ${result.count}.`);
-  } else {
-    ctx.reply(`ℹ️ Активных заявок по этим параметрам не найдено.`);
-  }
-});
+}
 
 // --------------------------------------------------------
-// ОСНОВНОЙ ОБРАБОТЧИК (Текст и Группа)
+// ОСНОВНОЙ ОБРАБОТЧИК (Только триггеры и сообщения)
 // --------------------------------------------------------
-
 bot.on("text", async (ctx) => {
   const text = ctx.message.text;
-  if (text.startsWith("/")) return; // Игнорируем команды
+  // Команды игнорируем, если они вдруг прилетят (хотя мы их удалили)
+  if (text.startsWith("/")) return; 
 
+  const chatID = ctx.chat.id.toString();
   const lowerText = text.toLowerCase();
-  const isGroup = ctx.chat.type === "group" || ctx.chat.type === "supergroup";
-  const isDispatchGroup = process.env.DISPATCH_GROUP_ID && ctx.chat.id.toString() === process.env.DISPATCH_GROUP_ID;
-
+  
   // 1. ЛОГИКА ДЛЯ ДИСПЕТЧЕРОВ (ГРУППА)
-  if (isGroup && isDispatchGroup) {
-    // Триггер создания
+  if (process.env.DISPATCH_GROUP_ID && chatID === process.env.DISPATCH_GROUP_ID) {
+    // #инцидент
     if (lowerText.includes("#инцидент")) {
       try {
         const parsedData = await analyzeDispatcherMessage(text);
         if (!parsedData) return ctx.reply("❌ Не удалось распознать инцидент.");
-        
         const result = await createIncident(parsedData);
-        if (result) await ctx.reply(`✅ Инцидент ID ${result.incident.id} зафиксирован автоматически.`);
-      } catch (err) {
-        console.error("Ошибка создания:", err);
-      }
+        if (result) await ctx.reply(`✅ Инцидент ID ${result.incident.id} зафиксирован.`);
+      } catch (err) { console.error("Ошибка создания:", err); }
       return;
     }
-
-    // Триггер закрытия
+    // #закрыто
     if (lowerText.includes("#закрыто")) {
       try {
         const parsedData = await analyzeResolutionMessage(text);
         if (!parsedData) return ctx.reply("❌ Не удалось распознать данные для закрытия.");
-        
         const result = await resolveIncident(parsedData);
         if (result && result.count > 0) {
           await ctx.reply(`✅ Движение восстановлено! Закрыто заявок: ${result.count}.`);
         } else {
-          await ctx.reply(`⚠️ Не удалось найти активный инцидент для закрытия.`);
+          await ctx.reply(`⚠️ Активных инцидентов для закрытия не найдено.`);
         }
-      } catch (err) {
-        console.error("Ошибка закрытия:", err);
-      }
+      } catch (err) { console.error("Ошибка закрытия:", err); }
       return;
     }
-    return; // Остальные сообщения в группе игнорируем
+    return; 
   }
 
-  // 2. ЛОГИКА ДЛЯ ПАССАЖИРОВ (ЛИЧКА)
+  // 2. ГРУППА ПАССАЖИРОВ (ответ только при упоминании)
+  if (process.env.PASSENGER_GROUP_ID && chatID === process.env.PASSENGER_GROUP_ID) {
+    const isBotMentioned = ctx.message.entities?.some(e => e.type === 'mention' || e.type === 'text_mention') 
+                            || text.toLowerCase().includes("@" + ctx.botInfo.username.toLowerCase());
+    if (isBotMentioned) await handlePassengerQuery(ctx, text);
+    return;
+  }
+
+  // 3. ЛИЧКА
   if (ctx.chat.type === "private") {
-    try {
-      await ctx.sendChatAction("typing");
-      const parsedData = await analyzeMessageWithLangChain(text);
-
-      if (!parsedData || !parsedData.isDelayQuestion) {
-        return ctx.reply("👋 Здравствуйте! Я диспетчерский бот. \n\nЯ могу подсказать информацию об авариях и задержках на линии. \n\nСпросите меня, например: «Где 12 троллейбус?»");
-      }
-
-      if (!parsedData.transportType) {
-        return ctx.reply("ℹ️ Я владею информацией только о трамваях, троллейбусах и метрополитене.");
-      }
-
-      const activeIncidents = await findRelevantIncident(parsedData);
-      const replyText = generateReply(activeIncidents, parsedData);
-      await ctx.reply(replyText, { reply_to_message_id: ctx.message.message_id });
-    } catch (err) {
-      console.error("Ошибка в ЛС:", err);
-      await ctx.reply("Извините, сервис временно недоступен.");
-    }
+    await handlePassengerQuery(ctx, text);
   }
 });
 
 // --------------------------------------------------------
 // ЗАПУСК
 // --------------------------------------------------------
-
 console.log("⏳ Подключение к серверам Telegram...");
 bot.telegram.getMe().then((botInfo) => {
     console.log(`✅ Бот @${botInfo.username} запущен.`);
     return bot.launch({ dropPendingUpdates: true });
-}).catch((error) => {
-    console.error("❌ Критическая ошибка:", error.message);
-    process.exit(1);
-});
+}).catch((err) => { console.error("❌ Критическая ошибка:", err.message); process.exit(1); });
 
 process.once("SIGINT", () => bot.stop("SIGINT"));
 process.once("SIGTERM", () => bot.stop("SIGTERM"));
