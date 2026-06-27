@@ -4,44 +4,41 @@ import { prisma } from "../database/prisma.js";
 export async function createIncident(data) {
   try {
     const incomingRoutes = Array.isArray(data.routes) ? data.routes : [];
+    
+    console.log("🔍 [DEBUG] Ищем инцидент...");
 
-    // 1. ИЩЕМ СУЩЕСТВУЮЩИЙ АКТИВНЫЙ ИНЦИДЕНТ
-    // Проверяем, есть ли авария ТАКОГО ЖЕ типа, у которой совпадает хотя бы один маршрут
-    if (incomingRoutes.length > 0) {
-      const existingIncident = await prisma.incident.findFirst({
-        where: {
-          status: "active",
-          incidentType: data.incidentType || "иная_причина",
-          routes: {
-            hasSome: incomingRoutes, // hasSome ищет пересечения в массивах
-          },
+    const existingIncident = await prisma.incident.findFirst({
+      where: {
+        status: "active",
+        transportType: data.transportType,
+        OR: [
+          ...(incomingRoutes.length > 0 ? [{ routes: { hasSome: incomingRoutes } }] : []),
+          ...(data.location ? [{ location: { contains: data.location, mode: 'insensitive' } }] : [])
+        ],
+      },
+    });
+
+    // 2. ЕСЛИ НАШЛИ ДУБЛИКАТ
+    if (existingIncident) {
+      console.log(`✅ [DEBUG] ИНЦИДЕНТ НАЙДЕН (ID: ${existingIncident.id}). ОБНОВЛЯЕМ.`);
+      
+      const mergedRoutes = [...new Set([...existingIncident.routes, ...incomingRoutes])];
+
+      const updatedIncident = await prisma.incident.update({
+        where: { id: existingIncident.id },
+        data: {
+          routes: mergedRoutes,
+          location: existingIncident.location || data.location,
+          direction: data.direction || existingIncident.direction,
         },
       });
 
-      // Если нашли дубликат — не плодим новые строки!
-      if (existingIncident) {
-        // Объединяем старые маршруты и новые, убирая дубликаты с помощью Set
-        const mergedRoutes = [
-          ...new Set([...existingIncident.routes, ...incomingRoutes]),
-        ];
-
-        // Обновляем существующий инцидент (вдруг добавились новые маршруты или локация)
-        const updatedIncident = await prisma.incident.update({
-          where: { id: existingIncident.id },
-          data: {
-            routes: mergedRoutes,
-            // Если в новой заявке пришла локация, а в старой её не было — запишем её
-            location: data.location || existingIncident.location,
-            direction: data.direction || existingIncident.direction,
-          },
-        });
-
-        // Возвращаем инцидент и флаг isNew: false (чтобы бот знал, что это дубликат)
-        return { incident: updatedIncident, isNew: false };
-      }
+      console.log("✅ [DEBUG] Инцидент обновлен. Возвращаем результат.");
+      return { incident: updatedIncident, isNew: false };
     }
 
-    // 2. ЕСЛИ ДУБЛИКАТОВ НЕ НАЙДЕНО — СОЗДАЕМ НОВЫЙ ИНЦИДЕНТ
+    // 3. ЕСЛИ НЕ НАШЛИ
+    console.log("⚠️ [DEBUG] Инцидент НЕ найден. СОЗДАЕМ НОВЫЙ.");
     const newIncident = await prisma.incident.create({
       data: {
         incidentType: data.incidentType || "иная_причина",
@@ -54,7 +51,7 @@ export async function createIncident(data) {
 
     return { incident: newIncident, isNew: true };
   } catch (error) {
-    console.error("Ошибка при сохранении/поиске инцидента:", error);
+    console.error("❌ КРИТИЧЕСКАЯ ОШИБКА В DB:", error);
     return null;
   }
 }
@@ -92,41 +89,38 @@ export async function findRelevantIncident(parsedData) {
 
 // --- ДЛЯ ДИСПЕТЧЕРА: ЗАКРЫТИЕ ИНЦИДЕНТА (Модуль 4.6) ---
 export async function resolveIncident(data) {
-  // Если нет ни маршрутов, ни локации — мы не знаем, что закрывать
   if ((!data.routes || data.routes.length === 0) && !data.location) {
     return { count: 0 };
   }
 
   try {
-    // Собираем условия (OR: либо совпали маршруты, либо совпала локация)
-    const conditions = [];
+    // Формируем более строгие условия
+    const orConditions = [];
 
-    if (data.routes && data.routes.length > 0) {
-      conditions.push({ routes: { hasSome: data.routes } });
-    }
-
-    if (data.location) {
-      conditions.push({
-        location: {
-          contains: data.location,
-          mode: "insensitive", // Игнорируем заглавные/строчные буквы
-        },
+    // Условие 1: Ищем по связке (Тип транспорта + Маршрут) - ЭТО САМОЕ ВАЖНОЕ
+    if (data.transportType && data.routes && data.routes.length > 0) {
+      orConditions.push({
+        transportType: data.transportType,
+        routes: { hasSome: data.routes }
       });
+    } else if (data.routes && data.routes.length > 0) {
+      // Если тип транспорта не определен, но есть маршрут - ищем только по маршруту (как раньше)
+      orConditions.push({ routes: { hasSome: data.routes } });
     }
 
-    if (data.direction) {
-      conditions.push({
-        direction: {
-          contains: data.direction,
-          mode: "insensitive",
-        },
+    // Условие 2: Ищем по локации
+    if (data.location) {
+      orConditions.push({
+        location: { contains: data.location, mode: "insensitive" }
       });
     }
 
     const result = await prisma.incident.updateMany({
       where: {
         status: "active",
-        OR: conditions, // Ищем по любому из совпадений
+        // Убеждаемся, что если тип транспорта передан, он должен совпадать
+        ...(data.transportType && { transportType: data.transportType }),
+        OR: orConditions,
       },
       data: {
         status: "resolved",
@@ -136,7 +130,7 @@ export async function resolveIncident(data) {
 
     return result;
   } catch (error) {
-    console.error("Ошибка при закрытии инцидента в БД:", error);
+    console.error("❌ Ошибка при закрытии инцидента:", error);
     return null;
   }
 }
