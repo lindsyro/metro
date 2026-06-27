@@ -107,8 +107,8 @@ bot.on("text", async (ctx) => {
 
   // 2. ГРУППА ПАССАЖИРОВ (ответ только при упоминании)
   if (process.env.PASSENGER_GROUP_ID && chatID === process.env.PASSENGER_GROUP_ID) {
-    const isBotMentioned = ctx.message.entities?.some(e => e.type === 'mention' || e.type === 'text_mention') 
-                            || text.toLowerCase().includes("@" + ctx.botInfo.username.toLowerCase());
+   const isBotMentioned = (ctx.message.entities && ctx.message.entities.some(e => e.type === 'mention' || e.type === 'text_mention'))
+                        || text.toLowerCase().includes("@" + ctx.botInfo.username.toLowerCase());
     if (isBotMentioned) await handlePassengerQuery(ctx, text);
     return;
   }
