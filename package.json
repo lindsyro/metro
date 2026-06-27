@@ -5,23 +5,35 @@
   "main": "src/app.js",
   "type": "module",
   "scripts": {
-    "start": "node src/app.js"
+    "start": "node src/app.js",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "node prisma/seed.js",
+    "db:clear": "node prisma/clear.js",
+    "db:reset": "prisma migrate reset"
   },
   "keywords": [],
   "author": "lindsyro",
   "license": "ISC",
   "dependencies": {
+    "@langchain/community": "^1.1.28",
+    "@langchain/core": "^1.2.1",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "axios": "^1.18.1",
     "crypto": "^1.0.1",
     "dotenv": "^17.4.2",
     "https": "^1.0.0",
+    "langchain": "^1.5.2",
+    "langchain-gigachat": "^0.0.18",
     "pg": "^8.22.0",
     "telegraf": "^4.16.3",
-    "uuid": "^14.0.1"
+    "uuid": "^14.0.1",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "prisma": "^7.8.0"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
   }
 }

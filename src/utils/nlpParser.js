@@ -1,4 +1,4 @@
-import { askGigaChat } from '../services/gigachat.js';
+import { askGigaChat } from "../services/gigachat.js";
 
 /**
  * Модуль 4.2: Анализирует сообщение пассажира
@@ -13,6 +13,7 @@ export async function analyzePassengerMessage(text) {
     "transportType": "tram" (трамвай), "trolleybus" (троллейбус), "bus" (автобус) или null
     "route": номер маршрута строкой (например "5", "20А") или null
     "location": название остановки/улицы или null
+    "direction": направление движения (например, "в центр", "в депо") или null
     `;
 
   return await askGigaChat(prompt);
@@ -28,8 +29,27 @@ export async function analyzeDispatcherMessage(text) {
     
     Верни строго JSON-объект с ключами:
     "incidentType": одно из ["обрыв_сети", "дтп", "поломка", "отключение_тока", "иная_причина"]. Считай любую "аварию" как "дтп".
+    "transportType": "tram" (трамвай), "trolleybus" (троллейбус), "bus" (автобус) или null
     "routes": МАССИВ строк с номерами маршрутов (например ["4", "7"]). Если маршрутов нет, верни пустой массив [].
-    "location": участок, перекресток, улица
+    "location": участок, перекресток, улица или null
+    "direction": направление движения (например, "к центру", "в депо") или null
+    `;
+
+  return await askGigaChat(prompt);
+}
+
+/**
+ * Модуль 4.5: Анализирует сообщение об устранении аварии
+ */
+export async function analyzeResolutionMessage(text) {
+  const prompt = `
+    Ты — строгий анализатор транспортных заявок. Твоя задача только возвращать JSON.
+    Проанализируй сообщение диспетчера о восстановлении движения / устранении аварии: "${text}"
+    
+    Верни строго JSON-объект с ключами:
+    "routes": МАССИВ строк с номерами маршрутов, которые ВОЗОБНОВИЛИ движение (например ["4", "7"]). Если конкретных маршрутов нет, верни пустой массив [].
+    "location": участок или улица, где движение восстановлено, или null
+    "direction": направление движения или null
     `;
 
   return await askGigaChat(prompt);

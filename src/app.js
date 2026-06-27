@@ -1,82 +1,141 @@
-// import 'dotenv/config';
-// import { analyzePassengerMessage, analyzeDispatcherMessage } from "./utils/nlpParser.js";
+import "dotenv/config";
+import { Telegraf } from "telegraf";
 
-// async function start() {
-//     console.log("Ждем ответа от GigaChat...");
-
-//     const passResult = await analyzePassengerMessage("Что-то 5-го трамика долго нет на Пушкина, замерз уже");
-//     console.log("Результат пассажира:", passResult);
-
-//     const dispResult = await analyzeDispatcherMessage("Авария на путях, Ленина 15, встали 4 и 7 маршруты");
-//     console.log("Результат диспетчера:", dispResult);
-// }
-
-// start();
-
-import 'dotenv/config';
-import { Telegraf } from 'telegraf';
-import { analyzePassengerMessage, analyzeDispatcherMessage } from './utils/nlpParser.js';
-import { createIncident, findRelevantIncident } from './modules/dbModules.js';
-import { generateReply } from './modules/responder.js';
+// Импорты модулей
+import { analyzeMessageWithLangChain } from "./modules/aiService.js";
+import {
+  analyzeDispatcherMessage,
+  analyzeResolutionMessage,
+} from "./utils/nlpParser.js";
+import {
+  createIncident,
+  findRelevantIncident,
+  resolveIncident,
+} from "./modules/dbModules.js";
+import { generateReply } from "./modules/responder.js";
 
 // Проверка токена
 if (!process.env.BOT_TOKEN) {
-    throw new Error("Не найден BOT_TOKEN в файле .env!");
+  throw new Error("❌ Не найден BOT_TOKEN в файле .env!");
 }
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
 // --------------------------------------------------------
-// СЦЕНАРИЙ 1: ДИСПЕТЧЕР (Команда /dispatch)
-// Чтобы бот не путал пассажиров и диспетчеров, пусть диспетчер пишет команду:
-// Пример: /dispatch Авария на путях, Ленина 15, встали 4 и 7 маршруты
+// СЦЕНАРИЙ 1: ДИСПЕТЧЕР (/dispatch)
 // --------------------------------------------------------
-bot.command('dispatch', async (ctx) => {
-    // Убираем само слово "/dispatch " из текста
-    const text = ctx.message.text.replace('/dispatch', '').trim();
-    if (!text) return ctx.reply("❌ Напишите текст заявки после команды /dispatch");
+bot.command("dispatch", async (ctx) => {
+  const text = ctx.message.text.replace("/dispatch", "").trim();
+  if (!text)
+    return ctx.reply("❌ Напишите текст заявки после команды /dispatch");
 
-    ctx.reply("⏳ Анализирую заявку диспетчера...");
+  ctx.reply("⏳ Анализирую заявку диспетчера...");
+  const parsedData = await analyzeDispatcherMessage(text);
 
-    const parsedData = await analyzeDispatcherMessage(text);
-    if (!parsedData) return ctx.reply("❌ Ошибка анализа текста (GigaChat).");
+  if (!parsedData) return ctx.reply("❌ Ошибка анализа заявки.");
 
-    const incident = await createIncident(parsedData);
-    if (incident) {
-        ctx.reply(`✅ Заявка зарегистрирована в базе!\nТип: ${incident.incidentType}\nМаршруты: ${incident.routes.join(', ')}`);
-    } else {
-        ctx.reply("❌ Ошибка при сохранении в базу данных.");
-    }
+  const result = await createIncident(parsedData);
+  if (result) {
+    const { incident, isNew } = result;
+    ctx.reply(
+      isNew
+        ? `✅ Новая заявка ID: ${incident.id} зарегистрирована.`
+        : `ℹ️ Инцидент (ID: ${incident.id}) обновлен.`,
+    );
+  } else {
+    ctx.reply("❌ Ошибка при работе с базой данных.");
+  }
 });
 
 // --------------------------------------------------------
-// СЦЕНАРИЙ 2: ПАССАЖИР (Любой обычный текст в чате)
+// СЦЕНАРИЙ 2: УСТРАНЕНИЕ (/resolve)
 // --------------------------------------------------------
-bot.on('text', async (ctx) => {
-    const text = ctx.message.text;
+bot.command("resolve", async (ctx) => {
+  const text = ctx.message.text.replace("/resolve", "").trim();
+  if (!text) return ctx.reply("❌ Напишите текст восстановления движения.");
 
-    // Игнорируем команды (начинаются с /)
-    if (text.startsWith('/')) return;
+  ctx.reply("⏳ Обрабатываю закрытие аварии...");
+  const parsedData = await analyzeResolutionMessage(text);
 
-    // 1. Анализируем сообщение (Модуль 4.2)
-    const parsedData = await analyzePassengerMessage(text);
-    
-    // Если это не вопрос о задержке — бот просто молчит и ничего не делает
+  if (!parsedData) return ctx.reply("❌ Ошибка анализа текста.");
+
+  const result = await resolveIncident(parsedData);
+  if (result && result.count > 0) {
+    ctx.reply(
+      `✅ Движение восстановлено! Закрыто активных заявок: ${result.count}.`,
+    );
+  } else {
+    ctx.reply(`ℹ️ Активных заявок по данным параметрам не найдено.`);
+  }
+});
+
+// --------------------------------------------------------
+// СЦЕНАРИЙ 3: ПАССАЖИР (Интеллектуальный анализ через GigaChat)
+// --------------------------------------------------------
+bot.on("text", async (ctx) => {
+  const text = ctx.message.text;
+  if (text.startsWith("/")) return; // Игнорируем команды
+
+  try {
+    // Используем обновленный сервис LangChain
+    const parsedData = await analyzeMessageWithLangChain(text);
+
+    // Если ответ пустой или это обычная болтовня (не вопрос о задержке)
     if (!parsedData || !parsedData.isDelayQuestion) return;
 
-    // 2. Ищем причину в базе (Модуль 4.3)
-    const activeIncident = await findRelevantIncident(parsedData);
+    console.log("🤖 GigaChat распознал запрос:", parsedData);
 
-    // 3. Формируем и отправляем ответ (Модуль 4.4)
-    const replyText = generateReply(activeIncident, parsedData);
-    await ctx.reply(replyText, { reply_to_message_id: ctx.message.message_id });
+    // Ищем инциденты в базе по распознанному маршруту/типу
+    const activeIncidents = await findRelevantIncident(parsedData);
+
+    // Формируем красивый ответ через ваш responder
+    const replyText = generateReply(activeIncidents, parsedData);
+
+    await ctx.reply(replyText, {
+      reply_to_message_id: ctx.message.message_id,
+    });
+  } catch (err) {
+    console.error("❌ Ошибка в обработке сообщения:", err);
+    // Можно не отвечать пользователю, если ошибка, чтобы не спамить в чат
+  }
 });
 
 // Запуск бота
-bot.launch().then(() => {
-    console.log("🤖 Транспортный бот успешно запущен!");
-});
+console.log("⏳ Подключение к серверам Telegram...");
 
-// Плавная остановка
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+// 1. Сначала проверяем соединение и валидность токена
+bot.telegram
+  .getMe()
+  .then((botInfo) => {
+    // Этот код выполнится ТОЛЬКО если токен верный и интернет работает
+    console.log("=======================================");
+    console.log(
+      `✅ УСПЕХ: Связь установлена! Бот @${botInfo.username} готов к работе.`,
+    );
+    console.log("=======================================");
+
+    // 2. Только теперь запускаем получение сообщений
+    return bot.launch({ dropPendingUpdates: true });
+  })
+  .catch((error) => {
+    // Сюда попадем, если нет интернета или токен неверный
+    console.error(
+      "❌ Критическая ошибка при подключении к Telegram:",
+      error.message,
+    );
+    process.exit(1); // Завершаем программу с кодом ошибки
+  });
+
+// Безопасная плавная остановка
+const safeStop = (signal) => {
+  try {
+    bot.stop(signal);
+    console.log(`\n🛑 Бот остановлен (${signal})`);
+  } catch (err) {
+    console.log(`\n🛑 Процесс завершен (${signal})`);
+    process.exit(0);
+  }
+};
+
+process.once("SIGINT", () => safeStop("SIGINT"));
+process.once("SIGTERM", () => safeStop("SIGTERM"));

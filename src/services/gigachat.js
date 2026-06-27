@@ -7,42 +7,59 @@ const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
 class GigaChatAuth {
   constructor() {
-    this.authKey = process.env.CLIENT_SECRET; 
+    this.authKey = process.env.CLIENT_SECRET;
     this.token = null;
     this.expiresAt = null;
+
+    // Новое свойство: будет хранить текущий процесс получения токена
+    this._tokenPromise = null;
   }
 
   async getToken() {
-    // Если токен есть и до его протухания больше 2 минут (120 000 мс) — отдаем из кэша
+    // 1. Если токен есть и он живой — отдаем сразу
     if (this.token && this.expiresAt && Date.now() < this.expiresAt - 120000) {
-      console.log("GigaChat: токен существует, берем из кэша");
       return this.token;
     }
 
-    const url = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth";
-
-    try {
-      const response = await axios.post(url, "scope=GIGACHAT_API_PERS", {
-        headers: {
-          Authorization: `Basic ${this.authKey}`,
-          "Content-Type": "application/x-www-form-urlencoded",
-          Accept: "application/json",
-          RqUID: crypto.randomUUID(),
-        },
-        httpsAgent, // Используем общий агент
-      });
-
-      this.token = response.data.access_token;
-      this.expiresAt = response.data.expires_at;
-
-      console.log("GigaChat: запрошен новый токен авторизации");
-
-      return this.token;
-    } catch (error) {
-      throw new Error(
-        `Ошибка получения токена: ${error.response?.data?.message || error.message}`
-      );
+    // 2. Если запрос за токеном УЖЕ идет прямо сейчас — ждем его, а не создаем новый!
+    if (this._tokenPromise) {
+      console.log("GigaChat: ожидание уже запущенного запроса токена...");
+      return this._tokenPromise;
     }
+
+    // 3. Запускаем новый запрос и сохраняем его в _tokenPromise
+    this._tokenPromise = (async () => {
+      const url = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth";
+      try {
+        const response = await axios.post(url, "scope=GIGACHAT_API_PERS", {
+          headers: {
+            Authorization: `Basic ${this.authKey}`,
+            "Content-Type": "application/x-www-form-urlencoded",
+            Accept: "application/json",
+            RqUID: crypto.randomUUID(),
+          },
+          httpsAgent,
+        });
+
+        this.token = response.data.access_token;
+        this.expiresAt = response.data.expires_at;
+
+        console.log("GigaChat: запрошен новый токен авторизации");
+        return this.token;
+      } catch (error) {
+        console.error(
+          "Критическая ошибка получения токена:",
+          error?.response?.data || error.message,
+        );
+        throw error;
+      } finally {
+        // Обязательно очищаем промис после завершения (даже если была ошибка)
+        this._tokenPromise = null;
+      }
+    })();
+
+    // Возвращаем результат выполнения
+    return this._tokenPromise;
   }
 }
 
@@ -59,28 +76,34 @@ export async function askGigaChat(prompt) {
     const response = await axios.post(
       "https://gigachat.devices.sberbank.ru/api/v1/chat/completions",
       {
-        model: "GigaChat", 
+        model: "GigaChat",
         messages: [{ role: "user", content: prompt }],
-        temperature: 0.1, 
+        temperature: 0.1,
       },
       {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        httpsAgent, 
-      }
+        httpsAgent,
+      },
     );
 
-    let text = response.data.choices[0].message.content;
+    const responseText = response.data.choices[0].message.content;
 
-    // Очищаем от markdown-разметки, если модель решила ее добавить
-    text = text
-      .replace(/```json/g, "")
-      .replace(/```/g, "")
-      .trim();
+    // --- НОВЫЙ БЛОК ОЧИСТКИ ОТ МУСОРА ---
+    // Ищем первую { и последнюю } в ответе нейросети
+    const firstBrace = responseText.indexOf("{");
+    const lastBrace = responseText.lastIndexOf("}");
 
-    return JSON.parse(text);
+    if (firstBrace !== -1 && lastBrace !== -1) {
+      const cleanJsonString = responseText.substring(firstBrace, lastBrace + 1);
+      return JSON.parse(cleanJsonString);
+    } else {
+      // Если скобок нет, пытаемся распарсить как есть (на случай ошибки)
+      return JSON.parse(responseText);
+    }
+    // ------------------------------------
   } catch (error) {
     console.error("Ошибка при обращении к GigaChat:", error.message);
     return null;
