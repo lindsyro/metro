@@ -5,11 +5,11 @@
   "main": "src/app.js",
   "type": "module",
   "scripts": {
-    "start": "node src/app.js",
+    "start": "tsx src/app.ts",
     "test": "vitest run",
     "db:migrate": "prisma migrate dev",
-    "db:seed": "node prisma/seed.js",
-    "db:clear": "node prisma/clear.js",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:clear": "tsx prisma/clear.ts",
     "db:reset": "prisma migrate reset"
   },
   "keywords": [],
@@ -32,10 +32,15 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/node": "^26.0.1",
+    "@types/pg": "^8.20.0",
+    "@types/uuid": "^10.0.0",
     "prisma": "^7.8.0",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
     "vitest": "^4.1.9"
   },
   "prisma": {
-    "seed": "node prisma/seed.js"
+    "seed": "tsx prisma/seed.ts"
   }
 }

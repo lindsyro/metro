@@ -4,7 +4,7 @@ import { StructuredOutputParser } from "@langchain/core/output_parsers";
 import { z } from "zod";
 import "dotenv/config";
 import https from "https";
-import { gigaAuth } from "../services/gigachat.js"; // Ваш мост авторизации
+import { gigaAuth } from "../services/gigachat.js";
 
 // Настройка безопасности (без отключения глобальных флагов)
 const httpsAgent = new https.Agent({
@@ -41,7 +41,7 @@ const prompt = ChatPromptTemplate.fromMessages([
 ]);
 
 // Функция анализа сообщения
-export async function analyzeMessageWithLangChain(message) {
+export async function analyzeMessageWithLangChain(message: string) {
   try {
     // 1. Получаем свежий токен через ваш мост
     const token = await gigaAuth.getToken();

@@ -1,12 +1,8 @@
-import pkg from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 import "dotenv/config";
 
-// Достаем PrismaClient из общего пакета
-const { PrismaClient } = pkg;
-
-// Дальше код остается таким же:
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });

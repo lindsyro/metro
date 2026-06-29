@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { Telegraf } from "telegraf";
+import { Telegraf, Context } from "telegraf";
 
 // Импорты модулей
 import { analyzeMessageWithLangChain } from "./modules/aiService.js";
@@ -24,7 +24,7 @@ const bot = new Telegraf(process.env.BOT_TOKEN);
 // --------------------------------------------------------
 // ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ПАССАЖИРОВ
 // --------------------------------------------------------
-async function handlePassengerQuery(ctx, text) {
+async function handlePassengerQuery(ctx: Context, text: string) {
   try {
     await ctx.sendChatAction("typing");
     const parsedData = await analyzeMessageWithLangChain(text);
@@ -36,7 +36,7 @@ async function handlePassengerQuery(ctx, text) {
     }
 
     // УМНЫЙ ПОИСК: если тип не определен, но есть маршрут — ищем широко
-    let incidents = [];
+    let incidents: any[] = [];
     if (parsedData.transportType) {
       incidents = await findRelevantIncident(parsedData);
     } else if (parsedData.routes && parsedData.routes.length > 0) {
@@ -50,7 +50,7 @@ async function handlePassengerQuery(ctx, text) {
     }
 
     // Проверка на неоднозначность (если нашли разные типы транспорта)
-    const uniqueTypes = [...new Set(incidents.map(i => i.transportType))];
+    const uniqueTypes = [...new Set(incidents.map((i: any) => i.transportType))];
     if (uniqueTypes.length > 1 && !parsedData.transportType) {
       return ctx.reply("🤔 Я нашел данные по этому маршруту и для трамваев, и для троллейбусов. Уточните, пожалуйста, что именно вас интересует?", {
         reply_to_message_id: ctx.message.message_id
@@ -69,7 +69,7 @@ async function handlePassengerQuery(ctx, text) {
 // ОСНОВНОЙ ОБРАБОТЧИК (Только триггеры и сообщения)
 // --------------------------------------------------------
 bot.on("text", async (ctx) => {
-  const text = ctx.message.text;
+  const text = (ctx.message as any)?.text || "";
   // Команды игнорируем, если они вдруг прилетят (хотя мы их удалили)
   if (text.startsWith("/")) return; 
 

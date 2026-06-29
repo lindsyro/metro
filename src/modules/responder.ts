@@ -1,4 +1,6 @@
-const causeDescriptions = {
+import type { PassengerData } from "../types.js";
+
+const causeDescriptions: Record<string, string> = {
   обрыв_сети: "обрывом контактной сети",
   дтп: "дорожно-транспортным происшествием на путях",
   поломка: "технической неисправностью подвижного состава",
@@ -6,7 +8,7 @@ const causeDescriptions = {
   иная_причина: "внештатной ситуацией",
 };
 
-export function generateReply(incidents, passengerData) {
+export function generateReply(incidents: any[], passengerData: PassengerData) {
   // 1. ПРИОРИТЕТ: Пользователь спросил про конкретный маршрут
   if (passengerData.route) {
     const routeIncidents = incidents.filter((i) =>
@@ -56,8 +58,8 @@ export function generateReply(incidents, passengerData) {
   }
 
   // Формируем список для общего запроса
-  const grouped = displayIncidents.reduce((acc, incident) => {
-    incident.routes.forEach((route) => {
+  const grouped = displayIncidents.reduce((acc: Record<string, string[]>, incident: any) => {
+    incident.routes.forEach((route: string) => {
       if (!acc[route]) acc[route] = [];
       acc[route].push(
         causeDescriptions[incident.incidentType] ||

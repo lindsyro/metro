@@ -11,7 +11,6 @@ class GigaChatAuth {
     this.token = null;
     this.expiresAt = null;
 
-    // Новое свойство: будет хранить текущий процесс получения токена
     this._tokenPromise = null;
   }
 
@@ -68,7 +67,7 @@ export const gigaAuth = new GigaChatAuth();
 /**
  * Вспомогательная функция: отправка промпта в GigaChat
  */
-export async function askGigaChat(prompt) {
+export async function askGigaChat(prompt: string) {
   // ИСПРАВЛЕНИЕ 1: Обращаемся к нашему классу для получения токена
   const token = await gigaAuth.getToken();
 
@@ -91,7 +90,6 @@ export async function askGigaChat(prompt) {
 
     const responseText = response.data.choices[0].message.content;
 
-    // --- НОВЫЙ БЛОК ОЧИСТКИ ОТ МУСОРА ---
     // Ищем первую { и последнюю } в ответе нейросети
     const firstBrace = responseText.indexOf("{");
     const lastBrace = responseText.lastIndexOf("}");

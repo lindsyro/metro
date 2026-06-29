@@ -3,7 +3,7 @@ import { askGigaChat } from "../services/gigachat.js";
 /**
  * Модуль 4.2: Анализирует сообщение пассажира
  */
-export async function analyzePassengerMessage(text) {
+export async function analyzePassengerMessage(text: string) {
   const prompt = `
     Ты — строгий анализатор данных транспортной компании. Твоя задача только возвращать JSON.
     Проанализируй сообщение пассажира: "${text}"
@@ -22,7 +22,7 @@ export async function analyzePassengerMessage(text) {
 /**
  * Модуль 4.1: Анализирует сообщение диспетчера
  */
-export async function analyzeDispatcherMessage(text) {
+export async function analyzeDispatcherMessage(text: string) {
   const prompt = `
     Ты — строгий анализатор заявок диспетчера. Твоя задача — вернуть ТОЛЬКО валидный JSON-объект без форматирования Markdown и без пояснительного текста.
     
@@ -54,7 +54,7 @@ export async function analyzeDispatcherMessage(text) {
 /**
  * Модуль 4.5: Анализирует сообщение об устранении аварии
  */
-export async function analyzeResolutionMessage(text) {
+export async function analyzeResolutionMessage(text: string) {
   const prompt = `
     Ты — анализатор заявок на ЗАКРЫТИЕ инцидентов.
     Извлеки данные из сообщения: "${text}"

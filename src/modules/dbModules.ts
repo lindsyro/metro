@@ -1,10 +1,11 @@
-import { prisma } from "../database/prisma.js";
+import { prisma } from "../database/prisma.ts";
+import type { DispatcherData, PassengerData, ResolutionData } from "../types.js";
 
 // --- ДЛЯ ДИСПЕТЧЕРА (Модуль 4.1) ---
-export async function createIncident(data) {
+export async function createIncident(data: DispatcherData) {
   try {
     const incomingRoutes = Array.isArray(data.routes) ? data.routes : [];
-    
+
     console.log("🔍 [DEBUG] Ищем инцидент...");
 
     const existingIncident = await prisma.incident.findFirst({
@@ -12,17 +13,25 @@ export async function createIncident(data) {
         status: "active",
         transportType: data.transportType,
         OR: [
-          ...(incomingRoutes.length > 0 ? [{ routes: { hasSome: incomingRoutes } }] : []),
-          ...(data.location ? [{ location: { contains: data.location, mode: 'insensitive' } }] : [])
+          ...(incomingRoutes.length > 0
+            ? [{ routes: { hasSome: incomingRoutes } }]
+            : []),
+          ...(data.location
+            ? [{ location: { contains: data.location, mode: "insensitive" } }]
+            : []),
         ],
       },
     });
 
     // 2. ЕСЛИ НАШЛИ ДУБЛИКАТ
     if (existingIncident) {
-      console.log(`✅ [DEBUG] ИНЦИДЕНТ НАЙДЕН (ID: ${existingIncident.id}). ОБНОВЛЯЕМ.`);
-      
-      const mergedRoutes = [...new Set([...existingIncident.routes, ...incomingRoutes])];
+      console.log(
+        `✅ [DEBUG] ИНЦИДЕНТ НАЙДЕН (ID: ${existingIncident.id}). ОБНОВЛЯЕМ.`,
+      );
+
+      const mergedRoutes = [
+        ...new Set([...existingIncident.routes, ...incomingRoutes]),
+      ];
 
       const updatedIncident = await prisma.incident.update({
         where: { id: existingIncident.id },
@@ -57,9 +66,9 @@ export async function createIncident(data) {
 }
 
 // --- ДЛЯ ПАССАЖИРА (Модуль 4.3) ---
-export async function findRelevantIncident(parsedData) {
+export async function findRelevantIncident(parsedData: PassengerData) {
   try {
-    const whereClause = { status: "active" };
+    const whereClause: any = { status: "active" };
 
     // Если есть маршруты — ищем по ним, если нет — ищем все активные
     if (parsedData.routes && parsedData.routes.length > 0) {
@@ -88,20 +97,20 @@ export async function findRelevantIncident(parsedData) {
 }
 
 // --- ДЛЯ ДИСПЕТЧЕРА: ЗАКРЫТИЕ ИНЦИДЕНТА (Модуль 4.6) ---
-export async function resolveIncident(data) {
+export async function resolveIncident(data: ResolutionData) {
   if ((!data.routes || data.routes.length === 0) && !data.location) {
     return { count: 0 };
   }
 
   try {
     // Формируем более строгие условия
-    const orConditions = [];
+    const orConditions: any[] = [];
 
     // Условие 1: Ищем по связке (Тип транспорта + Маршрут) - ЭТО САМОЕ ВАЖНОЕ
     if (data.transportType && data.routes && data.routes.length > 0) {
       orConditions.push({
         transportType: data.transportType,
-        routes: { hasSome: data.routes }
+        routes: { hasSome: data.routes },
       });
     } else if (data.routes && data.routes.length > 0) {
       // Если тип транспорта не определен, но есть маршрут - ищем только по маршруту (как раньше)
@@ -111,7 +120,7 @@ export async function resolveIncident(data) {
     // Условие 2: Ищем по локации
     if (data.location) {
       orConditions.push({
-        location: { contains: data.location, mode: "insensitive" }
+        location: { contains: data.location, mode: "insensitive" },
       });
     }
 
