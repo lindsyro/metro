@@ -6,12 +6,13 @@ import https from "https";
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
 class GigaChatAuth {
+  private authKey: string | undefined;
+  private token: string | null = null;
+  private expiresAt: number | null = null;
+  private _tokenPromise: Promise<string> | null = null;
+
   constructor() {
     this.authKey = process.env.CLIENT_SECRET;
-    this.token = null;
-    this.expiresAt = null;
-
-    this._tokenPromise = null;
   }
 
   async getToken() {
@@ -44,12 +45,13 @@ class GigaChatAuth {
         this.expiresAt = response.data.expires_at;
 
         console.log("GigaChat: запрошен новый токен авторизации");
-        return this.token;
-      } catch (error) {
-        console.error(
-          "Критическая ошибка получения токена:",
-          error?.response?.data || error.message,
-        );
+        return this.token as string;
+      } catch (error: unknown) {
+        if (axios.isAxiosError(error)) {
+          console.error("Критическая ошибка получения токена:", error.response?.data || error.message);
+        } else {
+          console.error("Критическая ошибка получения токена:", error);
+        }
         throw error;
       } finally {
         // Обязательно очищаем промис после завершения (даже если была ошибка)
@@ -102,8 +104,9 @@ export async function askGigaChat(prompt: string) {
       return JSON.parse(responseText);
     }
     // ------------------------------------
-  } catch (error) {
-    console.error("Ошибка при обращении к GigaChat:", error.message);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Ошибка при обращении к GigaChat:", message);
     return null;
   }
 }

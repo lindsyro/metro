@@ -66,8 +66,9 @@ export async function analyzeMessageWithLangChain(message: string) {
     if (result.route === "") result.route = null;
 
     return result;
-  } catch (err) {
-    console.error("❌ Ошибка в AI сервисе (LangChain):", err.message || err);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("❌ Ошибка в AI сервисе (LangChain):", message);
     return null;
   }
 }

@@ -1,4 +1,4 @@
-import { prisma } from "../database/prisma.ts";
+import { prisma } from "../database/prisma.js";
 import type { DispatcherData, PassengerData, ResolutionData } from "../types.js";
 
 // --- ДЛЯ ДИСПЕТЧЕРА (Модуль 4.1) ---
