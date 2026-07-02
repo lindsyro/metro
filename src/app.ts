@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { Telegraf } from "telegraf";
-import { handleDispatcherMessage } from "./handlers/dispatcherHandler.js";
+import { handleDispatcherMessage, setupDispatcherActions } from "./handlers/dispatcherHandler.js";
 import { handlePassengerQuery } from "./handlers/passengerHandler.js";
 
 // Проверка переменных окружения
@@ -9,7 +9,7 @@ if (!process.env.BOT_TOKEN) {
 }
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
-
+setupDispatcherActions(bot);
 // --------------------------------------------------------
 // МАРШРУТИЗАЦИЯ СООБЩЕНИЙ
 // --------------------------------------------------------

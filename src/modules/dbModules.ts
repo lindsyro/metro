@@ -6,48 +6,26 @@ export async function createIncident(data: DispatcherData) {
   try {
     const incomingRoutes = Array.isArray(data.routes) ? data.routes : [];
 
-    console.log("🔍 [DEBUG] Ищем инцидент...");
-
+    console.log("🔍 [DEBUG] Проверяем на полный дубликат...");
+    
+    // Ищем АБСОЛЮТНО идентичный инцидент
     const existingIncident = await prisma.incident.findFirst({
       where: {
         status: "active",
-        transportType: data.transportType,
-        OR: [
-          ...(incomingRoutes.length > 0
-            ? [{ routes: { hasSome: incomingRoutes } }]
-            : []),
-          ...(data.location
-            ? [{ location: { contains: data.location, mode: "insensitive" } }]
-            : []),
-        ],
+        incidentType: data.incidentType || "иная причина",
+        transportType: data.transportType || null,
+        routes: { equals: incomingRoutes },
+        location: data.location || null,
+        direction: data.direction || null,
       },
     });
 
-    // 2. ЕСЛИ НАШЛИ ДУБЛИКАТ
     if (existingIncident) {
-      console.log(
-        `✅ [DEBUG] ИНЦИДЕНТ НАЙДЕН (ID: ${existingIncident.id}). ОБНОВЛЯЕМ.`,
-      );
-
-      const mergedRoutes = [
-        ...new Set([...existingIncident.routes, ...incomingRoutes]),
-      ];
-
-      const updatedIncident = await prisma.incident.update({
-        where: { id: existingIncident.id },
-        data: {
-          routes: mergedRoutes,
-          location: existingIncident.location || data.location,
-          direction: data.direction || existingIncident.direction,
-        },
-      });
-
-      console.log("✅ [DEBUG] Инцидент обновлен. Возвращаем результат.");
-      return { incident: updatedIncident, isNew: false };
+      console.log(`✅ [DEBUG] ПОЛНЫЙ ДУБЛИКАТ НАЙДЕН (ID: ${existingIncident.id}). ПРОПУСКАЕМ СОЗДАНИЕ.`);
+      return { incident: existingIncident, isNew: false };
     }
 
-    // 3. ЕСЛИ НЕ НАШЛИ
-    console.log("⚠️ [DEBUG] Инцидент НЕ найден. СОЗДАЕМ НОВЫЙ.");
+    console.log("⚠️ [DEBUG] Создаем НОВЫЙ инцидент.");
     const newIncident = await prisma.incident.create({
       data: {
         incidentType: data.incidentType || "иная_причина",
