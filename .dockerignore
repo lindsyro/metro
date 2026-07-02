@@ -5,4 +5,4 @@ npm-debug.log
 .gitignore
 tests
 README.md
-presentation.md
+dist

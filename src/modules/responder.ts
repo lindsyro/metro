@@ -9,72 +9,85 @@ const causeDescriptions: Record<string, string> = {
 };
 
 export function generateReply(incidents: any[], passengerData: PassengerData) {
-  // 1. ПРИОРИТЕТ: Пользователь спросил про конкретный маршрут
-  if (passengerData.route) {
+  const requestedRoutes = passengerData.routes || [];
+  
+  // Проверяем, дал ли пассажир ХОТЬ КАКИЕ-ТО вводные данные
+  const hasSpecifics = requestedRoutes.length > 0 || passengerData.location || passengerData.transportType;
+
+  // 1. СЦЕНАРИЙ: АБСТРАКТНАЯ ЖАЛОБА ("не могу уехать", "долго жду")
+  if (!hasSpecifics) {
+    if (!incidents || incidents.length === 0) {
+      return `✅ В данный момент крупных сбоев в сети транспорта не зафиксировано. Пожалуйста, уточните номер маршрута, чтобы я мог дать точный ответ.`;
+    }
+    
+    // Если инциденты есть, выводим общую городскую сводку, но просим конкретики
+    const grouped = groupIncidents(incidents);
+    const list = formatGroupedIncidents(grouped);
+    return `ℹ️ Вы не указали маршрут. Сейчас в городе зафиксированы следующие задержки:\n${list}\n\nПожалуйста, уточните ваш маршрут, если его нет в списке.`;
+  }
+
+  // 2. СЦЕНАРИЙ: ПАССАЖИР УКАЗАЛ ЧТО-ТО КОНКРЕТНОЕ
+  let requestedContext = "";
+  if (requestedRoutes.length > 0) {
+    requestedContext = `на маршруте №${requestedRoutes.join(", ")}`;
+  } else if (passengerData.location) {
+    requestedContext = `в районе "${passengerData.location}"`;
+  } else if (passengerData.transportType) {
+    const types: Record<string, string> = { tram: 'трамваев', trolleybus: 'троллейбусов', metro: 'метро' };
+    requestedContext = `в движении ${types[passengerData.transportType] || 'транспорта'}`;
+  }
+
+  // 3. ПРИОРИТЕТ: Запрос по конкретному маршруту
+  if (requestedRoutes.length > 0) {
     const routeIncidents = incidents.filter((i) =>
-      i.routes.includes(passengerData.route),
+      i.routes.some((r: string) => requestedRoutes.includes(r))
     );
 
-    // Если нашли проблемы по этому маршруту
     if (routeIncidents.length > 0) {
-      const causes = [
-        ...new Set(
-          routeIncidents.map(
-            (i) =>
-              causeDescriptions[i.incidentType] ||
-              causeDescriptions["иная_причина"],
-          ),
-        ),
-      ].join(" и ");
-
-      const directions = [
-        ...new Set(routeIncidents.map((i) => i.direction).filter(Boolean)),
-      ].join(" и ");
+      const causes = [...new Set(routeIncidents.map(i => causeDescriptions[i.incidentType] || causeDescriptions["иная_причина"]))].join(" и ");
+      const directions = [...new Set(routeIncidents.map((i) => i.direction).filter(Boolean))].join(" и ");
       const directionText = directions ? ` (направление: ${directions})` : "";
 
-      return (
-        `⚠️ Здравствуйте! К сожалению, на маршруте №${passengerData.route}${directionText} сейчас сложная ситуация: ` +
-        `движение затруднено в связи с ${causes}. ` +
-        `Аварийные бригады уже работают. Приносим извинения за неудобства.`
-      );
+      return `⚠️ Здравствуйте! К сожалению, ${requestedContext}${directionText} сейчас сложная ситуация: движение затруднено в связи с ${causes}. Аварийные бригады уже работают. Приносим извинения за неудобства.`;
     }
 
-    // Если по этому маршруту проблем нет — молчим про другие и просто сообщаем норму
-    return `✅ На маршруте №${passengerData.route} активных сбоев не зафиксировано. Возможно, задержка вызвана дорожной ситуацией.`;
+    const capitalizedContext = requestedContext.charAt(0).toUpperCase() + requestedContext.slice(1);
+    return `✅ ${capitalizedContext} активных сбоев не зафиксировано. Возможно, задержка вызвана дорожной ситуацией.`;
   }
 
-  // 2. ОБЩИЙ ЗАПРОС: Пользователь не указал маршрут (например, "почему нет троллейбуса?")
-  // Фильтруем инциденты по типу транспорта, если он определен
+  // 4. ОБЩИЙ ЗАПРОС ПО ЛОКАЦИИ ИЛИ ТИПУ (Без номера маршрута)
   let displayIncidents = incidents;
   if (passengerData.transportType) {
-    displayIncidents = incidents.filter(
-      (i) => i.transportType === passengerData.transportType,
-    );
+    displayIncidents = incidents.filter(i => i.transportType === passengerData.transportType);
   }
 
-  // Если сбоев по нужному типу транспорта нет
   if (!displayIncidents || displayIncidents.length === 0) {
-    return `✅ В настоящее время активных сбоев на линии вашего транспорта не зафиксировано.`;
+    const capitalizedContext = requestedContext.charAt(0).toUpperCase() + requestedContext.slice(1);
+    return `✅ ${capitalizedContext} активных сбоев не зафиксировано. Возможно, задержка вызвана дорожной ситуацией.`;
   }
 
-  // Формируем список для общего запроса
-  const grouped = displayIncidents.reduce((acc: Record<string, string[]>, incident: any) => {
+  const grouped = groupIncidents(displayIncidents);
+  const list = formatGroupedIncidents(grouped);
+  return `ℹ️ По вашему запросу зафиксированы задержки:\n${list}\n\nСпециалисты работают над устранением.`;
+}
+
+// --- Вспомогательные функции для чистоты кода ---
+
+function groupIncidents(incidentsList: any[]) {
+  return incidentsList.reduce((acc: Record<string, string[]>, incident: any) => {
     incident.routes.forEach((route: string) => {
       if (!acc[route]) acc[route] = [];
-      acc[route].push(
-        causeDescriptions[incident.incidentType] ||
-          causeDescriptions["иная_причина"],
-      );
+      acc[route].push(causeDescriptions[incident.incidentType] || causeDescriptions["иная_причина"]);
     });
     return acc;
   }, {});
+}
 
-  const list = Object.entries(grouped)
+function formatGroupedIncidents(grouped: Record<string, string[]>) {
+  return Object.entries(grouped)
     .map(([route, causes]) => {
       const uniqueCauses = [...new Set(causes)].join(" и ");
       return `• Маршрут ${route}: в связи с ${uniqueCauses}`;
     })
     .join("\n");
-
-  return `ℹ️ По вашему запросу зафиксированы задержки:\n${list}\n\nСпециалисты работают над устранением.`;
 }

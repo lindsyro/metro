@@ -11,13 +11,16 @@ const httpsAgent = new https.Agent({
   rejectUnauthorized: false, // В будущем замените на { ca: fs.readFileSync(...) }
 });
 
-// Определение схемы: добавили metro
+// Определение схемы: добавили location и заменили route на массив routes
 const parser = StructuredOutputParser.fromZodSchema(
   z.object({
-    route: z
+    routes: z
+      .array(z.string())
+      .describe("Массив номеров маршрутов/линий. Сюда писать ТОЛЬКО ЦИФРЫ. Если маршрут не указан, верни пустой массив []"),
+    location: z
       .string()
       .nullable()
-      .describe("Номер маршрута/линии или null, если не указан"),
+      .describe("Улица, остановка или район (например, 'Ленина', 'Баумана'). Если не указано, верни null"),
     transportType: z
       .enum(["tram", "trolleybus", "metro"])
       .nullable()
@@ -28,14 +31,15 @@ const parser = StructuredOutputParser.fromZodSchema(
   }),
 );
 
-// Создание шаблона запроса с обновленными инструкциями
+// Создание шаблона запроса с обновленными инструкциями про улицы и цифры
 const prompt = ChatPromptTemplate.fromMessages([
   [
     "system",
     `Ты — помощник транспортного бота. Твоя задача — извлекать данные из сообщений.
-    1. Если пользователь НЕ называет номер маршрута или линии — обязательно установи route: null. 
-    2. КРИТИЧЕСКИ ВАЖНО: Значение поля transportType должно быть СТРОГО на английском языке. Разрешены ТОЛЬКО варианты: "tram", "trolleybus", "metro". Никогда не пиши русские слова! Если спрашивают про автобусы или другой транспорт, устанавливай transportType: null.
-    3. Считай ЛЮБЫЕ вопросы ИЛИ ЖАЛОБЫ на ожидание, местоположение, поломки или отсутствие транспорта ("где", "когда будет", "почему стоит", "жду", "нет троллейбуса уже долго") как запросы о задержке (устанавливай isDelayQuestion: true).`,
+    1. Если пользователь называет улицу, район или остановку (например, "на Ленина", "Баумана", "в центре") — ОБЯЗАТЕЛЬНО пиши это в поле "location".
+    2. Поле "routes" должно содержать ТОЛЬКО номера (цифры). Никогда не пиши туда названия улиц! Если номеров в сообщении нет, верни пустой массив [].
+    3. КРИТИЧЕСКИ ВАЖНО: Значение поля transportType должно быть СТРОГО на английском языке. Разрешены ТОЛЬКО варианты: "tram", "trolleybus", "metro". Никогда не пиши русские слова! Если спрашивают про автобусы или другой транспорт, устанавливай transportType: null.
+    4. Считай ЛЮБЫЕ вопросы ИЛИ ЖАЛОБЫ на ожидание, местоположение, поломки или отсутствие транспорта ("где", "когда будет", "почему стоит", "не могу уехать", "нет троллейбуса уже долго") как запросы о задержке (устанавливай isDelayQuestion: true).`,
   ],
   ["human", "{format_instructions}\nСообщение пользователя: {message}"],
 ]);
@@ -50,7 +54,7 @@ export async function analyzeMessageWithLangChain(message: string) {
     const model = new GigaChat({
       accessToken: token,
       model: "GigaChat",
-      temperature: 0,
+      temperature: 0, // 0 нужен для строгого соблюдения JSON-схемы
       httpsAgent: httpsAgent,
     });
 
@@ -61,9 +65,6 @@ export async function analyzeMessageWithLangChain(message: string) {
       format_instructions: parser.getFormatInstructions(),
       message,
     });
-
-    // Дополнительная нормализация: если маршрут пришел пустой строкой, приводим к null
-    if (result.route === "") result.route = null;
 
     return result;
   } catch (err: unknown) {
