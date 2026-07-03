@@ -35,7 +35,8 @@ BOT_TOKEN=ваш_токен_бота
 DISPATCH_GROUP_ID=-1001234567890
 
 # Авторизационные данные GigaChat API (Credentials)
-GIGACHAT_CREDENTIALS=ваш_токен_gigachat
+CLIENT_ID=ваш_id
+CLIENT_SECRET=ваш_токен_gigachat
 
 # Строка подключения к PostgreSQL
 DATABASE_URL="postgresql://ИМЯ_ПОЛЬЗОВАТЕЛЯ:ПАРОЛЬ@localhost:5432/НАЗВАНИЕ_БД?schema=public"
@@ -54,7 +55,7 @@ npm run db:seed
 ### 4. Запуск проекта
 Для запуска бота в штатном режиме:
 ```bash
-npm start
+npm run start
 ```
 В терминале должно появиться сообщение об успешном подключении к серверам Telegram.
 
