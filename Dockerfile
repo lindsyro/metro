@@ -9,7 +9,7 @@ COPY package*.json ./
 COPY prisma ./prisma/
 
 # Устанавливаем ВСЕ зависимости (включая devDependencies, так как там находится tsx)
-RUN npm ci
+RUN npm ci --legacy-peer-deps
 
 # Генерируем клиент Prisma
 RUN npx prisma generate
