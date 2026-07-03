@@ -2,8 +2,16 @@ import "dotenv/config";
 import crypto from "crypto";
 import axios from "axios";
 import https from "https";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 
-const httpsAgent = new https.Agent({ rejectUnauthorized: false });
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const certPath = path.resolve(__dirname, "../../certs/mintsifra_ca_bundle.crt");
+
+export const httpsAgent = new https.Agent({
+  ca: fs.readFileSync(certPath),
+});
 
 class GigaChatAuth {
   private authKey: string | undefined;
@@ -48,7 +56,10 @@ class GigaChatAuth {
         return this.token as string;
       } catch (error: unknown) {
         if (axios.isAxiosError(error)) {
-          console.error("Критическая ошибка получения токена:", error.response?.data || error.message);
+          console.error(
+            "Критическая ошибка получения токена:",
+            error.response?.data || error.message,
+          );
         } else {
           console.error("Критическая ошибка получения токена:", error);
         }

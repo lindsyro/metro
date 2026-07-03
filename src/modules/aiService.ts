@@ -4,23 +4,22 @@ import { StructuredOutputParser } from "@langchain/core/output_parsers";
 import { z } from "zod";
 import "dotenv/config";
 import https from "https";
-import { gigaAuth } from "../services/gigachat.js";
-
-// Настройка безопасности (без отключения глобальных флагов)
-const httpsAgent = new https.Agent({
-  rejectUnauthorized: false, // В будущем замените на { ca: fs.readFileSync(...) }
-});
+import { gigaAuth, httpsAgent } from "../services/gigachat.js";
 
 // Определение схемы: добавили location и заменили route на массив routes
 const parser = StructuredOutputParser.fromZodSchema(
   z.object({
     routes: z
       .array(z.string())
-      .describe("Массив номеров маршрутов/линий. Сюда писать ТОЛЬКО ЦИФРЫ. Если маршрут не указан, верни пустой массив []"),
+      .describe(
+        "Массив номеров маршрутов/линий. Сюда писать ТОЛЬКО ЦИФРЫ. Если маршрут не указан, верни пустой массив []",
+      ),
     location: z
       .string()
       .nullable()
-      .describe("Улица, остановка или район (например, 'Ленина', 'Баумана'). Если не указано, верни null"),
+      .describe(
+        "Улица, остановка или район (например, 'Ленина', 'Баумана'). Если не указано, верни null",
+      ),
     transportType: z
       .enum(["tram", "trolleybus", "metro"])
       .nullable()
