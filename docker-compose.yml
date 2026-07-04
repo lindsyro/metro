@@ -49,7 +49,7 @@ services:
     volumes:
       # Прокидываем исполняемый файл в контейнер
       - ./opera-proxy.linux-amd64-no-fix:/usr/local/bin/opera-proxy:ro
-    command: /usr/local/bin/opera-proxy -country EU
+    command: /usr/local/bin/opera-proxy -country EU -bind-address 0.0.0.0:18080
 
 volumes:
   postgres_data:
