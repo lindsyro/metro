@@ -9,7 +9,7 @@ COPY package*.json ./
 COPY prisma ./prisma/
 
 # Устанавливаем ВСЕ зависимости (включая devDependencies, так как там находится tsx)
-RUN npm ci --legacy-peer-deps
+RUN npm ci --legacy-peer-deps && npm install undici@6 --legacy-peer-deps
 
 # Генерируем клиент Prisma
 RUN npx prisma generate
