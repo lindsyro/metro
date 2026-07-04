@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { Telegraf } from "telegraf";
-import { ProxyAgent, fetch } from "undici";
+import { HttpsProxyAgent } from "https-proxy-agent";
 import {
   handleDispatcherMessage,
   setupDispatcherActions,
@@ -12,18 +12,22 @@ if (!process.env.BOT_TOKEN) {
   throw new Error("❌ Не найден BOT_TOKEN в файле .env!");
 }
 
-const agent = new ProxyAgent("http://proxy:18080");
+// Настройка прокси (берется из .env, либо используется внутридокерный адрес по умолчанию)
+const proxyUrl = process.env.PROXY_URL || "http://proxy:18080";
+
+let agent: HttpsProxyAgent<string> | undefined;
+if (proxyUrl) {
+  try {
+    agent = new HttpsProxyAgent(proxyUrl);
+  } catch (e) {
+    console.warn("⚠️ Ошибка инициализации прокси:", e);
+  }
+}
 
 const bot = new Telegraf(process.env.BOT_TOKEN, {
-  telegram: {
-    // Заставляем бота идти через прокси
-    fetch: (url, config) => {
-      return fetch(url, {
-        ...config,
-        dispatcher: agent,
-      });
-    },
-  },
+  telegram: agent ? {
+    agent: agent,
+  } : undefined,
 });
 
 setupDispatcherActions(bot);
