@@ -1,4 +1,6 @@
 import "dotenv/config";
+// Отключаем строгую проверку сертификатов для работы GigaChat
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 import { Telegraf } from "telegraf";
 import { HttpsProxyAgent } from "https-proxy-agent";
 import {
