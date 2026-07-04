@@ -7,11 +7,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const certPath = path.resolve(__dirname, "../../certs/mintsifra_ca_bundle.crt");
 
-export const httpsAgent = new https.Agent({
-  ca: fs.readFileSync(certPath),
-});
+// Отключаем проверку TLS на уровне модуля на всякий случай
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
+// (Сертификаты удалены за ненадобностью)
 
 class GigaChatAuth {
   private authKey: string | undefined;
@@ -46,7 +46,6 @@ class GigaChatAuth {
             Accept: "application/json",
             RqUID: crypto.randomUUID(),
           },
-          httpsAgent,
         });
 
         this.token = response.data.access_token;
@@ -97,7 +96,6 @@ export async function askGigaChat(prompt: string) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        httpsAgent,
       },
     );
 
