@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   app:
@@ -7,10 +7,15 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-    # DATABASE_URL будет автоматически взят из .env файла
+    # Страховка от сбоев резолвинга DNS (чтобы точно видел внешние адреса)
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     depends_on:
       db:
         condition: service_healthy
+      proxy:
+        condition: service_started
     # Создаем/синхронизируем таблицы перед запуском
     command: sh -c "npx prisma db push && npm start"
 
@@ -27,10 +32,24 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-metro_db}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-metro_db}",
+        ]
       interval: 5s
       timeout: 5s
       retries: 5
+
+  # --- НАШ НОВЫЙ КОНТЕЙНЕР С ПРОКСИ ---
+  proxy:
+    image: debian:bookworm-slim
+    container_name: transport_proxy
+    restart: unless-stopped
+    volumes:
+      # Прокидываем исполняемый файл в контейнер
+      - ./opera-proxy.linux-amd64-no-fix:/usr/local/bin/opera-proxy:ro
+    command: /usr/local/bin/opera-proxy -country EU
 
 volumes:
   postgres_data:
