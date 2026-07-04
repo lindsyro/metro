@@ -1,6 +1,10 @@
 import "dotenv/config";
 import { Telegraf } from "telegraf";
-import { handleDispatcherMessage, setupDispatcherActions } from "./handlers/dispatcherHandler.js";
+import { HttpsProxyAgent } from "https-proxy-agent";
+import {
+  handleDispatcherMessage,
+  setupDispatcherActions,
+} from "./handlers/dispatcherHandler.js";
 import { handlePassengerQuery } from "./handlers/passengerHandler.js";
 
 // Проверка переменных окружения
@@ -8,7 +12,13 @@ if (!process.env.BOT_TOKEN) {
   throw new Error("❌ Не найден BOT_TOKEN в файле .env!");
 }
 
-const bot = new Telegraf(process.env.BOT_TOKEN);
+const agent = new HttpsProxyAgent("http://proxy:18080");
+const bot = new Telegraf(process.env.BOT_TOKEN, {
+  telegram: {
+    agent: agent,
+  },
+});
+
 setupDispatcherActions(bot);
 // --------------------------------------------------------
 // МАРШРУТИЗАЦИЯ СООБЩЕНИЙ
