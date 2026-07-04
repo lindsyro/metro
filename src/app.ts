@@ -68,8 +68,7 @@ bot.telegram
     return bot.launch({ dropPendingUpdates: true });
   })
   .catch((err: unknown) => {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error("❌ Критическая ошибка:", message);
+    console.error("❌ Критическая ошибка (Full Object):", err);
     process.exit(1);
   });
 

@@ -5,10 +5,7 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-    # Страховка от сбоев резолвинга DNS (чтобы точно видел внешние адреса)
-    dns:
-      - 8.8.8.8
-      - 1.1.1.1
+
     depends_on:
       db:
         condition: service_healthy
