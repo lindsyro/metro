@@ -3,6 +3,8 @@ services:
     build: .
     container_name: metro_bot
     restart: unless-stopped
+    ports:
+      - "5555:5555"
     env_file:
       - .env
 
