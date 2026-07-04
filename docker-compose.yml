@@ -17,8 +17,8 @@ services:
       proxy:
         condition: service_started
     # Создаем/синхронизируем таблицы перед запуском
-    # command: sh -c "npx prisma db push && npm start"
-    command: tail -f /dev/null
+    command: sh -c "npx prisma db push && npm start"
+    # command: tail -f /dev/null
 
   db:
     image: postgres:15-alpine
