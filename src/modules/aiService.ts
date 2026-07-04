@@ -4,7 +4,7 @@ import { StructuredOutputParser } from "@langchain/core/output_parsers";
 import { z } from "zod";
 import "dotenv/config";
 import https from "https";
-import { gigaAuth, httpsAgent } from "../services/gigachat.js";
+import { gigaAuth } from "../services/gigachat.js";
 
 // Определение схемы: добавили location и заменили route на массив routes
 const parser = StructuredOutputParser.fromZodSchema(
@@ -54,7 +54,6 @@ export async function analyzeMessageWithLangChain(message: string) {
       accessToken: token,
       model: "GigaChat",
       temperature: 0, // 0 нужен для строгого соблюдения JSON-схемы
-      httpsAgent: httpsAgent,
     });
 
     const chain = prompt.pipe(model).pipe(parser);
