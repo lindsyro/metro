@@ -58,6 +58,8 @@ export async function analyzeMessageWithLangChain(message: string) {
 
     const chain = prompt.pipe(model).pipe(parser);
 
+    console.log(`[GigaChat] 🤖 Отправляем на анализ сообщение пассажира: "${message.substring(0, 50)}${message.length > 50 ? '...' : ''}"`);
+
     // 3. Выполняем запрос
     const result = await chain.invoke({
       format_instructions: parser.getFormatInstructions(),

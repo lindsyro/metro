@@ -83,6 +83,8 @@ export async function askGigaChat(prompt: string) {
   // ИСПРАВЛЕНИЕ 1: Обращаемся к нашему классу для получения токена
   const token = await gigaAuth.getToken();
 
+  console.log(`[GigaChat] 🤖 Выполняем запрос от диспетчера...`);
+
   try {
     const response = await axios.post(
       "https://gigachat.devices.sberbank.ru/api/v1/chat/completions",
